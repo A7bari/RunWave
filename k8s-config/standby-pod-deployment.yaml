@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: standby-pod
+  namespace: code-exec-system
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: standby-pod
+      language: python
+  template:
+    metadata:
+      labels:
+        app: standby-pod
+        language: python
+    spec:
+      containers:
+        - name: standby-container
+          image: python:3.9-slim
+          command: ["/bin/sh"]
+          args: ["-c", "while true; do sleep 30; done;"]
+          resources:
+            limits:
+              cpu: "0.5"
+              memory: "256Mi"
+            requests:
+              cpu: "0.25"
+              memory: "128Mi"
