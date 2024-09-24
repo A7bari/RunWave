@@ -4,7 +4,7 @@
 
 The core functionality of a code execution system is to allow users to submit code, execute it on a server, and return the results. This type of system is commonly found in online coding platforms, where users can practice and test their code without setting up a local development environment.
 
-This project is inspired by the penitervew's video on youtube: _Design a Code Execution System | System Design_. take a look at the video [here](https://www.youtube.com/watch?v=TOyD-5QgpuE)
+The penitervew's video on YouTube inspires this project: _Design a Code Execution System | System Design_. take a look at the video [here](https://www.youtube.com/watch?v=TOyD-5QgpuE)
 
 ### Some of the key requirements for such a system include:
 
@@ -21,11 +21,11 @@ This project is inspired by the penitervew's video on youtube: _Design a Code Ex
 
 ## Architecture Overview
 
-We used a combination of Docker and Kubernetes to achieve the desired level of isolation, scalability, and fault tolerance.
+We combined Docker and Kubernetes to achieve the desired level of isolation, scalability, and fault tolerance.
 
 The high-level architecture will consist of the following components:
 
-![Architecture Overview](docs/architecture.png)
+![Architecture Overview](/docs/architecture.png)
 
 - **API Server**: The API server will receive code execution requests from users and store them in a message queue for processing.
 
