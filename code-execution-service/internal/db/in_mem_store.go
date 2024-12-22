@@ -8,6 +8,9 @@ import (
 	"github.com/A7bari/RunWave/internal/types"
 )
 
+// InMemStore is an in-memory implementation of the Store interface
+// this is used for testing purposes
+// you can replace this with a database implementation
 type InMemStore struct {
 	Results map[string]types.TaskOutput
 }

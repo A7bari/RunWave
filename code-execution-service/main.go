@@ -70,7 +70,7 @@ func main() {
 
 	// create task queues and schedulers for each language
 	for _, lang := range serviceConf.Languages {
-		q := db.GetInMemTaskQueue(100)
+		q := db.GetInMemTaskQueue(300)
 		taskQueues[lang] = q
 
 		// create a scheduler
