@@ -20,8 +20,6 @@ import (
 
 const (
 	inUsePodLabel = "in-use-pod"
-
-	standByPodLabel = "standby-pod"
 )
 
 type RunOutput struct {

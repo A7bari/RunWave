@@ -3,6 +3,7 @@ package coderunner
 import (
 	"log"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -36,10 +37,14 @@ func connectToK8s() PodManager {
 func TestSchedulerStartWorkers(t *testing.T) {
 	// Mock dependencies
 	mockTaskQueue := db.GetInMemTaskQueue(10)
-	mockTaskQueue.AddTask(taskqueue.NewTask("task1", "python", "print('Hello, World!')", taskqueue.TaskCallbacksOpts{}))
-	mockTaskQueue.AddTask(taskqueue.NewTask("task2", "python", "print('Hello, World!')", taskqueue.TaskCallbacksOpts{}))
-	mockTaskQueue.AddTask(taskqueue.NewTask("task3", "python", "print('Hello, World!')", taskqueue.TaskCallbacksOpts{}))
-	mockTaskQueue.AddTask(taskqueue.NewTask("task4", "python", "print('Hello, World!')", taskqueue.TaskCallbacksOpts{}))
+
+	for i := 1; i <= 4; i++ {
+		mockTaskQueue.AddTask(taskqueue.NewTaskBuilder().
+			SetID("task" + strconv.Itoa(i)).
+			SetLang("python").
+			SetCode("print('Hello, World!')").
+			Build())
+	}
 
 	podManager := connectToK8s()
 

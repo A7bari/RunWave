@@ -21,19 +21,17 @@ func RegisterRoutes(router *gin.Engine) {
 			return
 		}
 
-		task := taskqueue.NewTask(
-			uuid.New().String(),
-			req.Language,
-			req.Code,
-			taskqueue.TaskCallbacksOpts{})
+		task := taskqueue.NewTaskBuilder().
+			SetID(uuid.New().String()).
+			SetLang(req.Language).
+			SetCode(req.Code).
+			Build()
 
-		taskQueue, exist := c.Get(req.Language)
-		if !exist {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported language"})
+		err := EnqueueTask(task, c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		taskQueue.(taskqueue.TaskQueue).AddTask(task)
 
 		c.JSON(http.StatusOK, gin.H{"task_id": task.GetTaskID()})
 	})
@@ -72,43 +70,40 @@ func RegisterRoutes(router *gin.Engine) {
 		wg := sync.WaitGroup{}
 		wg.Add(1)
 
-		task := taskqueue.NewTask(
-			uuid.New().String(),
-			req.Language,
-			req.Code,
-			taskqueue.TaskCallbacksOpts{
-				OnCreated: func(task taskqueue.Task) {
-					fmt.Fprintf(flusher, "data: NEW TASK task: %s\n\n", task.GetTaskID())
-					flusher.Flush()
-				},
-				OnChanged: func(task taskqueue.Task) {
-					fmt.Fprintf(flusher, "data: status: %s task: %s\n\n", task.GetStatus(), task.GetTaskID())
-					flusher.Flush()
-
-					if task.GetError() != nil {
-						fmt.Fprintf(flusher, "data: ERROR: %v task: %s\n\n", task.GetError(), task.GetTaskID())
-						flusher.Flush()
-					}
-				},
-
-				OnResult: func(task taskqueue.Task) {
+		task := taskqueue.NewTaskBuilder().
+			SetID(uuid.New().String()).
+			SetLang(req.Language).
+			SetCode(req.Code).
+			RegisterCallback(
+				taskqueue.OnSuccess,
+				func(task taskqueue.Task) {
 					output, isError := task.GetResult()
 					fmt.Fprintf(flusher, "data: #### FINISHED ####  task: %s [is error: %v] output: %s  \n\n", task.GetTaskID(), isError, output)
 					flusher.Flush()
 
 					wg.Done()
 				},
-			})
+			).
+			Build()
 
-		taskQueue, exist := c.Get(req.Language)
-		if !exist {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Unsupported language"})
+		err := EnqueueTask(task, c)
+
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-
-		taskQueue.(taskqueue.TaskQueue).AddTask(task)
 
 		wg.Wait()
 	})
 
+}
+
+func EnqueueTask(task taskqueue.Task, c *gin.Context) error {
+	taskQueue, exist := c.Get(task.GetLanguage())
+	if !exist {
+		return fmt.Errorf("unsupported language")
+	}
+
+	taskQueue.(taskqueue.TaskQueue).AddTask(task)
+	return nil
 }
