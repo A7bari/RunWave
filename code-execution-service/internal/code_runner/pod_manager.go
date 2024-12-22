@@ -95,7 +95,7 @@ func (p *PodManagerImp) ConsumePod() string {
 func (p *PodManagerImp) Run(command []string, podname string, timeout time.Duration) (*RunOutput, error) {
 	pod, ok := p.inUsePods[podname]
 	if !ok {
-		return nil, fmt.Errorf("pod not found, pod should be consumed first")
+		return nil, fmt.Errorf("pod manager: pod not found, pod should be consumed first")
 	}
 	// change the pods label to in-use-pod
 	// so K8b will automatically create a fresh replica

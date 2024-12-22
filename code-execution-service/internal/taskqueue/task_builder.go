@@ -18,7 +18,7 @@ type TaskBuilderImpl struct {
 // NewTaskBuilder creates a new TaskBuilder
 func NewTaskBuilder() TaskBuilder {
 	return &TaskBuilderImpl{
-		task: &TaskImp{},
+		task: newTask(),
 	}
 }
 

@@ -84,8 +84,17 @@ type TaskImp struct {
 // runtime check
 var _ Task = (*TaskImp)(nil)
 
-// Callbacks Options for Task
-type CallbacksOpts func() (TaskEvent, Callback)
+// NewTask creates a new task
+// a private function to create a new task with default values
+// tobe used in the builder
+func newTask() *TaskImp {
+	return &TaskImp{
+		callbacks: make(map[TaskEvent]Callback),
+		status:    "pending",
+		maxRetry:  1,
+		retryCnt:  0,
+	}
+}
 
 // implement Task interface
 // SetResult sets the task result and calls the OnSuccess callback
