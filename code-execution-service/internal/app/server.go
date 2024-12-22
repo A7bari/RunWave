@@ -3,23 +3,39 @@ package app
 import (
 	"log"
 
-	"github.com/A7bari/RunWave/internal"
+	"github.com/A7bari/RunWave/internal/db"
+	"github.com/A7bari/RunWave/internal/taskqueue"
 	"github.com/gin-gonic/gin"
 )
 
+type ServerOpts struct {
+	Queues map[string]taskqueue.TaskQueue
+}
 type Server struct {
-	podManager *internal.PodManager
-	router     *gin.Engine
+	router *gin.Engine
 }
 
-func NewServer(podManager *internal.PodManager) *Server {
+func NewServer(opts ServerOpts) *Server {
+	r := gin.Default()
+
+	st := db.GetInMemStore()
+
+	// Middleware to inject TaskQueue into context
+	r.Use(func(c *gin.Context) {
+		// Inject TaskQueues into context
+		for lang, q := range opts.Queues {
+			c.Set(lang, q)
+		}
+		c.Set("store", st)
+		c.Next()
+	})
+
 	server := &Server{
-		podManager: podManager,
-		router:     gin.Default(),
+		router: r,
 	}
 
 	// Register routes from routes.go
-	RegisterRoutes(server.router, podManager)
+	RegisterRoutes(server.router)
 
 	return server
 }

@@ -1,4 +1,12 @@
-package internal
+package types
+
+type TaskOutput struct {
+	TaskID  string
+	Output  string
+	IsError bool
+	Status  string
+	Lang    string
+}
 
 // ErrorResponse represents the structure of error responses sent to the client
 type ErrorResponse struct {

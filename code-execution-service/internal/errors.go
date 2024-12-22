@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/A7bari/RunWave/internal/types"
 )
 
 type Error struct {
@@ -66,7 +68,7 @@ func RespondWithJSONError(w http.ResponseWriter, statusCode int, message string)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	response := ErrorResponse{
+	response := types.ErrorResponse{
 		Message: message,
 		Code:    statusCode,
 	}

@@ -62,5 +62,6 @@ To run the code execution system, follow these steps:
 5. run the API server using air or go run
 
 ```bash
-  go run code-execution-service/main.go
+  cd code-execution-service
+  go run main.go
 ```
