@@ -6,7 +6,6 @@ type TaskBuilder interface {
 	SetCode(code string) TaskBuilder
 	SetID(id string) TaskBuilder
 	SetMaxRetry(maxRetry int) TaskBuilder
-	RegisterCallback(event TaskEvent, callback Callback) TaskBuilder
 	Build() Task
 }
 
@@ -42,11 +41,6 @@ func (b *TaskBuilderImpl) SetMaxRetry(maxRetry int) TaskBuilder {
 	return b
 }
 
-func (b *TaskBuilderImpl) RegisterCallback(event TaskEvent, callback Callback) TaskBuilder {
-	b.task.RegisterCallback(event, callback)
-	return b
-}
-
 func (b *TaskBuilderImpl) Build() Task {
 	// validate task
 	if b.task.language == "" {
@@ -64,7 +58,5 @@ func (b *TaskBuilderImpl) Build() Task {
 	if b.task.maxRetry < 0 {
 		panic("maxRetry must be greater than or equal to 0")
 	}
-
-	b.task.call(OnCreated)
 	return b.task
 }

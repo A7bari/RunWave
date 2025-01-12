@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"net/http"
-	"sync"
 
 	"github.com/A7bari/RunWave/internal/store"
 	"github.com/A7bari/RunWave/internal/taskqueue"
@@ -53,48 +52,38 @@ func RegisterRoutes(router *gin.Engine) {
 		c.JSON(http.StatusOK, gin.H{"task_id": task.TaskID, "status": task.Status, "output": task.Output})
 	})
 
-	router.POST("/submit/event", func(c *gin.Context) {
-		// Set headers for streaming
-		c.Header("Content-Type", "text/event-stream")
-		c.Header("Cache-Control", "no-cache")
-		c.Header("Connection", "keep-alive")
+	// router.POST("/submit/event", func(c *gin.Context) {
+	// 	// Set headers for streaming
+	// 	c.Header("Content-Type", "text/event-stream")
+	// 	c.Header("Cache-Control", "no-cache")
+	// 	c.Header("Connection", "keep-alive")
 
-		var req types.CodeExecutionReq
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
+	// 	var req types.CodeExecutionReq
+	// 	if err := c.ShouldBindJSON(&req); err != nil {
+	// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// 		return
+	// 	}
 
-		// Flush the response writer
-		flusher := c.Writer
-		wg := sync.WaitGroup{}
-		wg.Add(1)
+	// 	// Flush the response writer
+	// 	flusher := c.Writer
+	// 	wg := sync.WaitGroup{}
+	// 	wg.Add(1)
 
-		task := taskqueue.NewTaskBuilder().
-			SetID(uuid.New().String()).
-			SetLang(req.Language).
-			SetCode(req.Code).
-			RegisterCallback(
-				taskqueue.OnSuccess,
-				func(task taskqueue.Task) {
-					output, isError := task.GetResult()
-					fmt.Fprintf(flusher, "data: #### FINISHED ####  task: %s [is error: %v] output: %s  \n\n", task.GetTaskID(), isError, output)
-					flusher.Flush()
+	// 	task := taskqueue.NewTaskBuilder().
+	// 		SetID(uuid.New().String()).
+	// 		SetLang(req.Language).
+	// 		SetCode(req.Code).
+	// 		Build()
 
-					wg.Done()
-				},
-			).
-			Build()
+	// 	err := EnqueueTask(task, c)
 
-		err := EnqueueTask(task, c)
+	// 	if err != nil {
+	// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// 		return
+	// 	}
 
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		wg.Wait()
-	})
+	// 	wg.Wait()
+	// })
 
 }
 

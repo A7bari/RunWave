@@ -1,9 +1,5 @@
 package taskqueue
 
-import (
-	"fmt"
-)
-
 // Task is an interface for task
 type Task interface {
 	// Running sets the task status to running
@@ -39,12 +35,6 @@ type Task interface {
 	// GetError returns the task error
 	GetError() error
 
-	// RegisterCallback registers a callback for the task
-	RegisterCallback(event TaskEvent, callback Callback) error
-
-	// UnregisterCallback unregisters a callback for the task
-	UnregisterCallback(event TaskEvent)
-
 	// Retry Return if the task should be retried
 	Retry() bool
 }
@@ -70,15 +60,14 @@ type TaskResult struct {
 
 // Task is a struct to hold task details
 type TaskImp struct {
-	taskID    string
-	language  string
-	code      string
-	status    string
-	result    TaskResult
-	err       error
-	callbacks map[TaskEvent]Callback
-	maxRetry  int
-	retryCnt  int
+	taskID   string
+	language string
+	code     string
+	status   string
+	result   TaskResult
+	err      error
+	maxRetry int
+	retryCnt int
 }
 
 // runtime check
@@ -89,10 +78,9 @@ var _ Task = (*TaskImp)(nil)
 // tobe used in the builder
 func newTask() *TaskImp {
 	return &TaskImp{
-		callbacks: make(map[TaskEvent]Callback),
-		status:    "pending",
-		maxRetry:  1,
-		retryCnt:  0,
+		status:   "pending",
+		maxRetry: 1,
+		retryCnt: 0,
 	}
 }
 
@@ -105,42 +93,13 @@ func (t *TaskImp) SetResult(output string, isError bool) {
 	}
 
 	t.Completed()
-
-	t.call(OnSuccess)
 }
 
 // implement Task interface
 // Retry Return if the task should be retried
 // and calls the OnRetry callback
 func (t *TaskImp) Retry() bool {
-	if t.retryCnt >= t.maxRetry {
-		return false
-	}
-	t.call(OnRetry)
-	return true
-}
-
-// implement Task interface
-// Register a callback for the task exepct for OnCreated
-// onCreated event can be added only at the creation of the task
-func (t *TaskImp) RegisterCallback(event TaskEvent, callback Callback) error {
-	// onCreated event can be added only at the creation of the task
-	if event == OnCreated {
-		panic("task: onCreated event can be added only in NewTask function")
-	}
-
-	if _, ok := t.callbacks[event]; ok {
-		return fmt.Errorf("task: callback for event %v already exists", event)
-	}
-
-	t.callbacks[event] = callback
-	return nil
-}
-
-// implement Task interface
-// Unregister a callback for the task
-func (t *TaskImp) UnregisterCallback(event TaskEvent) {
-	delete(t.callbacks, event)
+	return t.retryCnt < t.maxRetry
 }
 
 func (t *TaskImp) Running() {
@@ -158,7 +117,6 @@ func (t *TaskImp) Pending() {
 func (t *TaskImp) Failed(err error) {
 	t.err = err
 	t.setStatus("failed")
-	t.call(OnFail)
 }
 
 func (t *TaskImp) GetResult() (string, bool) {
@@ -187,11 +145,4 @@ func (t *TaskImp) GetError() error {
 
 func (t *TaskImp) setStatus(status string) {
 	t.status = status
-	t.call(OnChanged)
-}
-
-func (t *TaskImp) call(event TaskEvent) {
-	if cb, ok := t.callbacks[event]; ok {
-		cb(t)
-	}
 }
