@@ -37,6 +37,12 @@ type Task interface {
 
 	// Retry Return if the task should be retried
 	Retry() bool
+
+	// GetMaxRetry returns the max retry count
+	GetMaxRetry() int
+
+	// GetRetryCnt returns the retry count
+	GetRetryCnt() int
 }
 
 // Callback is a function type for task callbacks
@@ -76,7 +82,20 @@ var _ Task = (*TaskImp)(nil)
 // NewTask creates a new task
 // a private function to create a new task with default values
 // tobe used in the builder
-func newTask() *TaskImp {
+func NewTask(taskId, code, language string) *TaskImp {
+	return &TaskImp{
+		taskID:   taskId,
+		code:     code,
+		language: language,
+		status:   "pending",
+		maxRetry: 1,
+		retryCnt: 0,
+		result:   TaskResult{},
+		err:      nil,
+	}
+}
+
+func newTaskBase() *TaskImp {
 	return &TaskImp{
 		status:   "pending",
 		maxRetry: 1,
@@ -145,4 +164,12 @@ func (t *TaskImp) GetError() error {
 
 func (t *TaskImp) setStatus(status string) {
 	t.status = status
+}
+
+func (t *TaskImp) GetMaxRetry() int {
+	return t.maxRetry
+}
+
+func (t *TaskImp) GetRetryCnt() int {
+	return t.retryCnt
 }

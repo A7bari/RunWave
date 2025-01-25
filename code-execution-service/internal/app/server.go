@@ -22,7 +22,7 @@ type Server struct {
 func NewServer(opts ServerOpts) *Server {
 	r := gin.Default()
 
-	st := db.GetInMemStore()
+	st := db.GetPostgresStore()
 
 	// Middleware to inject TaskQueue into context
 	r.Use(func(c *gin.Context) {

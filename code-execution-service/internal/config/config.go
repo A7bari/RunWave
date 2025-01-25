@@ -14,6 +14,8 @@ type ServiceConfig struct {
 	Standbylabel string
 	InUseLabel   string
 	Languages    []string
+	QueueAdrr    string
+	QueueName    string
 }
 
 var (
@@ -35,6 +37,8 @@ func loadConfig() *ServiceConfig {
 	standbyLabel := flag.String("standby-label", "app=standby-pod", "The label to use for standby pods")
 	inUseLabel := flag.String("in-use-label", "in-use-pod", "The label to use for in-use pods")
 	langs := flag.String("languages", "python,javascript", "The languages to support")
+	qAdrr := flag.String("queue-addr", "amqp://guest:guest@localhost:5672/", "The RabbitMQ address")
+	qName := flag.String("queue-name", "task-queue", "The RabbitMQ queue name")
 
 	flag.Parse()
 
@@ -44,5 +48,7 @@ func loadConfig() *ServiceConfig {
 		Standbylabel: *standbyLabel,
 		InUseLabel:   *inUseLabel,
 		Languages:    strings.Split(*langs, ","),
+		QueueAdrr:    *qAdrr,
+		QueueName:    *qName,
 	}
 }

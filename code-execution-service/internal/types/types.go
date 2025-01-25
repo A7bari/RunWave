@@ -6,6 +6,7 @@ type TaskOutput struct {
 	IsError bool
 	Status  string
 	Lang    string
+	Version int
 }
 
 // ErrorResponse represents the structure of error responses sent to the client

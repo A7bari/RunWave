@@ -26,6 +26,10 @@ var (
 	// taskQueues is a map of task queues for each language
 	taskQueues = make(map[string]taskqueue.TaskQueue)
 
+	// Distributed task queue
+	dQueuePub taskqueue.DqueuePublisher
+	dQueueRec taskqueue.DqueueReceiver
+
 	// schedulers is a map of schedulers for each language
 	schedulers = make(map[string]*coderunner.Scheduler)
 
@@ -63,8 +67,18 @@ func main() {
 	serviceConf := config.GetConfig()
 
 	// create the main store
-	mStore = db.GetInMemStore()
+	mStore = db.GetPostgresStore()
+	
 
+	rbmq, err := db.GetRabbitMQConn()
+	if err != nil {
+		log.Fatalf("Error getting RabbitMQ connection: %v", err)
+	}
+
+	dQueuePub = rbmq
+	dQueueRec = rbmq
+
+	// create the task qu
 	// create the pod manager
 	podManager = coderunner.NewPodManager(clientset, restConfig, serviceConf.Namespace)
 
@@ -80,17 +94,25 @@ func main() {
 			OnEndExec: func(task taskqueue.Task) {
 				output, isError := task.GetResult()
 				fmt.Printf("Scheduler: Task %s ended with output: %s\n", task.GetTaskID(), output)
-				mStore.SaveResult(types.TaskOutput{
+				err := mStore.SaveResult(types.TaskOutput{
 					TaskID:  task.GetTaskID(),
 					Output:  output,
 					Status:  task.GetStatus(),
 					IsError: isError,
 					Lang:    task.GetLanguage(),
+					Version: task.GetRetryCnt(),
 				})
+				if err != nil {
+					fmt.Printf("Scheduler [Error saving task] :result: %s\n", err)
+				}
 			},
 
 			OnFailExec: func(task taskqueue.Task) {
-				fmt.Printf("Scheduler: Task %s failed with err: %s\n", task.GetTaskID(), task.GetError())
+				fmt.Printf("Scheduler [failed task]: Task %s failed with err: %s\n", task.GetTaskID(), task.GetError())
+				err := mStore.UpdateTask(task)
+				if err != nil {
+					fmt.Printf("Scheduler [Error updating task]: %s\n", err)
+				}
 			},
 		})
 

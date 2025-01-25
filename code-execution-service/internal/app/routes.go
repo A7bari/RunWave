@@ -52,39 +52,6 @@ func RegisterRoutes(router *gin.Engine) {
 		c.JSON(http.StatusOK, gin.H{"task_id": task.TaskID, "status": task.Status, "output": task.Output})
 	})
 
-	// router.POST("/submit/event", func(c *gin.Context) {
-	// 	// Set headers for streaming
-	// 	c.Header("Content-Type", "text/event-stream")
-	// 	c.Header("Cache-Control", "no-cache")
-	// 	c.Header("Connection", "keep-alive")
-
-	// 	var req types.CodeExecutionReq
-	// 	if err := c.ShouldBindJSON(&req); err != nil {
-	// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	// 		return
-	// 	}
-
-	// 	// Flush the response writer
-	// 	flusher := c.Writer
-	// 	wg := sync.WaitGroup{}
-	// 	wg.Add(1)
-
-	// 	task := taskqueue.NewTaskBuilder().
-	// 		SetID(uuid.New().String()).
-	// 		SetLang(req.Language).
-	// 		SetCode(req.Code).
-	// 		Build()
-
-	// 	err := EnqueueTask(task, c)
-
-	// 	if err != nil {
-	// 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	// 		return
-	// 	}
-
-	// 	wg.Wait()
-	// })
-
 }
 
 func EnqueueTask(task taskqueue.Task, c *gin.Context) error {
