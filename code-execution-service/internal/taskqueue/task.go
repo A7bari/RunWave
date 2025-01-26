@@ -1,7 +1,7 @@
 package taskqueue
 
 // Task is an interface for task
-type Task interface {
+type ITask interface {
 	// Running sets the task status to running
 	Running()
 
@@ -17,96 +17,58 @@ type Task interface {
 	// SetResult sets the task result
 	SetResult(output string, isError bool)
 
-	// GetResult returns the task result
-	GetResult() (string, bool)
-
-	// GetTaskID returns the task ID
-	GetTaskID() string
-
-	// GetLanguage returns the task language
-	GetLanguage() string
-
-	// GetCode returns the task code
-	GetCode() string
-
-	// GetStatus returns the task status
-	GetStatus() string
-
-	// GetError returns the task error
-	GetError() error
-
 	// Retry Return if the task should be retried
 	Retry() bool
-
-	// GetMaxRetry returns the max retry count
-	GetMaxRetry() int
-
-	// GetRetryCnt returns the retry count
-	GetRetryCnt() int
 }
 
-// Callback is a function type for task callbacks
-type Callback func(task Task)
-
-// TaskCallbacksOpts is a struct to hold task callbacks
-type TaskEvent int
-
-const (
-	OnCreated TaskEvent = iota
-	OnChanged
-	OnSuccess
-	OnRetry
-	OnFail
-)
-
 type TaskResult struct {
-	Output  string
-	IsError bool
+	Output  string `json:"output"`
+	IsError bool   `json:"is_error"`
 }
 
 // Task is a struct to hold task details
-type TaskImp struct {
-	taskID   string
-	language string
-	code     string
-	status   string
-	result   TaskResult
-	err      error
-	maxRetry int
-	retryCnt int
+type Task struct {
+	TaskID   string     `json:"task_id"`
+	Language string     `json:"lang"`
+	Code     string     `json:"code"`
+	Status   string     `json:"status"`
+	Result   TaskResult `json:"result"`
+	Err      error      `json:"error"`
+	MaxRetry int        `json:"max_retry"`
+	RetryCnt int        `json:"retry_cnt"`
 }
 
 // runtime check
-var _ Task = (*TaskImp)(nil)
+var _ ITask = (*Task)(nil)
 
 // NewTask creates a new task
 // a private function to create a new task with default values
 // tobe used in the builder
-func NewTask(taskId, code, language string) *TaskImp {
-	return &TaskImp{
-		taskID:   taskId,
-		code:     code,
-		language: language,
-		status:   "pending",
-		maxRetry: 1,
-		retryCnt: 0,
-		result:   TaskResult{},
-		err:      nil,
+func NewTask(taskId, code, language string) *Task {
+	return &Task{
+		TaskID:   taskId,
+		Code:     code,
+		Language: language,
+		Status:   "pending",
+		MaxRetry: 1,
+		RetryCnt: 0,
+		Result:   TaskResult{},
+		Err:      nil,
 	}
 }
 
-func newTaskBase() *TaskImp {
-	return &TaskImp{
-		status:   "pending",
-		maxRetry: 1,
-		retryCnt: 0,
+func newTaskBase() *Task {
+	return &Task{
+		Status:   "pending",
+		MaxRetry: 1,
+		RetryCnt: 0,
 	}
 }
 
 // implement Task interface
 // SetResult sets the task result and calls the OnSuccess callback
-func (t *TaskImp) SetResult(output string, isError bool) {
-	t.result = TaskResult{
+func (t *Task) SetResult(output string, isError bool) {
+	t.Result = TaskResult{
 		Output:  output,
 		IsError: isError,
 	}
@@ -117,59 +79,27 @@ func (t *TaskImp) SetResult(output string, isError bool) {
 // implement Task interface
 // Retry Return if the task should be retried
 // and calls the OnRetry callback
-func (t *TaskImp) Retry() bool {
-	return t.retryCnt < t.maxRetry
+func (t *Task) Retry() bool {
+	return t.RetryCnt < t.MaxRetry
 }
 
-func (t *TaskImp) Running() {
+func (t *Task) Running() {
 	t.setStatus("running")
 }
 
-func (t *TaskImp) Completed() {
+func (t *Task) Completed() {
 	t.setStatus("completed")
 }
 
-func (t *TaskImp) Pending() {
+func (t *Task) Pending() {
 	t.setStatus("pending")
 }
 
-func (t *TaskImp) Failed(err error) {
-	t.err = err
+func (t *Task) Failed(err error) {
+	t.Err = err
 	t.setStatus("failed")
 }
 
-func (t *TaskImp) GetResult() (string, bool) {
-	return t.result.Output, t.result.IsError
-}
-
-func (t *TaskImp) GetTaskID() string {
-	return t.taskID
-}
-
-func (t *TaskImp) GetLanguage() string {
-	return t.language
-}
-
-func (t *TaskImp) GetCode() string {
-	return t.code
-}
-
-func (t *TaskImp) GetStatus() string {
-	return t.status
-}
-
-func (t *TaskImp) GetError() error {
-	return t.err
-}
-
-func (t *TaskImp) setStatus(status string) {
-	t.status = status
-}
-
-func (t *TaskImp) GetMaxRetry() int {
-	return t.maxRetry
-}
-
-func (t *TaskImp) GetRetryCnt() int {
-	return t.retryCnt
+func (t *Task) setStatus(status string) {
+	t.Status = status
 }

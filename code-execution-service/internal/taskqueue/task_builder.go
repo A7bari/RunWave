@@ -15,7 +15,7 @@ type TaskBuilder interface {
 
 // TaskBuilderImpl is an implementation of TaskBuilder
 type TaskBuilderImpl struct {
-	task *TaskImp
+	task *Task
 }
 
 // NewTaskBuilder creates a new TaskBuilder
@@ -26,61 +26,61 @@ func NewTaskBuilder() TaskBuilder {
 }
 
 func (b *TaskBuilderImpl) SetLang(lang string) TaskBuilder {
-	b.task.language = lang
+	b.task.Language = lang
 	return b
 }
 
 func (b *TaskBuilderImpl) SetCode(code string) TaskBuilder {
-	b.task.code = code
+	b.task.Code = code
 	return b
 }
 
 func (b *TaskBuilderImpl) SetID(id string) TaskBuilder {
-	b.task.taskID = id
+	b.task.TaskID = id
 	return b
 }
 
 func (b *TaskBuilderImpl) SetMaxRetry(maxRetry int) TaskBuilder {
-	b.task.maxRetry = maxRetry
+	b.task.MaxRetry = maxRetry
 	return b
 }
 
 func (b *TaskBuilderImpl) SetRetryCnt(retryCnt int) TaskBuilder {
-	b.task.retryCnt = retryCnt
+	b.task.RetryCnt = retryCnt
 	return b
 }
 
 func (b *TaskBuilderImpl) SetStatus(status string) TaskBuilder {
-	b.task.status = status
+	b.task.Status = status
 	return b
 }
 
 func (b *TaskBuilderImpl) SetResult(result TaskResult) TaskBuilder {
-	b.task.result = result
+	b.task.Result = result
 	return b
 }
 
 func (b *TaskBuilderImpl) SetError(err error) TaskBuilder {
-	b.task.err = err
+	b.task.Err = err
 	return b
 }
 
 func (b *TaskBuilderImpl) Build() Task {
 	// validate task
-	if b.task.language == "" {
+	if b.task.Language == "" {
 		panic("language is required")
 	}
 
-	if b.task.code == "" {
+	if b.task.Code == "" {
 		panic("code is required")
 	}
 
-	if b.task.taskID == "" {
+	if b.task.TaskID == "" {
 		panic("taskID is required")
 	}
 
-	if b.task.maxRetry < 0 {
+	if b.task.MaxRetry < 0 {
 		panic("maxRetry must be greater than or equal to 0")
 	}
-	return b.task
+	return *b.task
 }
