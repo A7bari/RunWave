@@ -1,5 +1,7 @@
 package taskqueue
 
+import "encoding/json"
+
 // Task is an interface for task
 type ITask interface {
 	// Running sets the task status to running
@@ -102,4 +104,23 @@ func (t *Task) Failed(err error) {
 
 func (t *Task) setStatus(status string) {
 	t.Status = status
+}
+
+// Decode decodes the TaskMsg from a byte slice
+func Decode(data []byte) (*Task, error) {
+	taskMsg := &Task{}
+	err := json.Unmarshal(data, taskMsg)
+	if err != nil {
+		return nil, err
+	}
+	return taskMsg, nil
+}
+
+// Encode encodes the TaskMsg to a byte slice
+func (t *Task) Encode() ([]byte, error) {
+	data, err := json.Marshal(t)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }
