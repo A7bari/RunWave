@@ -8,6 +8,7 @@ import (
 
 	"sync"
 
+	"github.com/A7bari/RunWave/internal/config"
 	"github.com/A7bari/RunWave/internal/store"
 	"github.com/A7bari/RunWave/internal/taskqueue"
 	"gorm.io/driver/postgres"
@@ -48,7 +49,17 @@ type TaskResult struct {
 
 func GetPostgresStore() *PostgresStore {
 	psStoreOnce.Do(func() {
-		dsn := "user=youruser password=yourpassword dbname=yourdatabase host=localhost port=5433 sslmode=disable"
+		postgresConfig := config.GetConfig().Postgres
+
+		dsn := fmt.Sprintf(
+			"user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
+			postgresConfig.User,
+			postgresConfig.Password,
+			postgresConfig.DBName,
+			postgresConfig.Host,
+			postgresConfig.Port,
+		)
+
 		db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 			NamingStrategy: schema.NamingStrategy{SingularTable: true},
 		})
@@ -80,6 +91,7 @@ func (s *PostgresStore) SaveResult(ctx context.Context, taskID string, taskResul
 
 func (s *PostgresStore) CreateTask(ctx context.Context, task taskqueue.Task) (string, error) {
 	newTask := Task{
+		TaskID:   task.TaskID,
 		Language: task.Language,
 		Code:     task.Code,
 		Status:   task.Status,

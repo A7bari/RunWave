@@ -17,22 +17,24 @@ var (
 type RabbitMQConn struct {
 	conn         *amqp.Connection
 	sendChan     *amqp.Channel
-	receiveChan  *amqp.Channel
-	queueName    string
+	ExchangeName string
 	consumerOnce sync.Once // Ensures only one consumer is created
+	queues       map[string]string
 }
 
-// runtime check RabbitMQConn implements DqueuePublisher and DqueueReceiver interfaces
-var _ taskqueue.DqueuePublisher = (*RabbitMQConn)(nil)
-var _ taskqueue.DqueueReceiver = (*RabbitMQConn)(nil)
+// runtime check RabbitMQConn implements QueuePublisher and.QueueConsumer interfaces
+var _ taskqueue.QueuePublisher = (*RabbitMQConn)(nil)
+var _ taskqueue.QueueConsumer = (*RabbitMQConn)(nil)
 
 // GetRabbitMQConn initializes the RabbitMQConn with a RabbitMQ connection
 // only initializes the RabbitMQConn once
 func GetRabbitMQConn() (*RabbitMQConn, error) {
 	var err error
 	rabbitMQConnOnce.Do(func() {
+		fmt.Println("Setting up RabbitMQ connection")
 		addr := config.GetConfig().QueueAdrr
-		queueName := config.GetConfig().QueueName
+		languages := config.GetConfig().Languages
+		exchangeName := "Tasks_Direct"
 
 		conn, connErr := amqp.Dial(addr)
 		if connErr != nil {
@@ -47,7 +49,15 @@ func GetRabbitMQConn() (*RabbitMQConn, error) {
 			return
 		}
 
-		if _, qErr := sendChan.QueueDeclare(queueName, true, false, false, false, nil); qErr != nil {
+		if qErr := sendChan.ExchangeDeclare(
+			exchangeName, // name
+			"direct",     // type
+			true,         // durable
+			false,        // auto-deleted
+			false,        // internal
+			false,        // no-wait
+			nil,          // arguments
+		); qErr != nil {
 			sendChan.Close() // Rollback on error
 			conn.Close()
 			err = fmt.Errorf("failed to declare a queue: %w", qErr)
@@ -55,26 +65,30 @@ func GetRabbitMQConn() (*RabbitMQConn, error) {
 		}
 
 		rabbitMQConn = &RabbitMQConn{
-			conn:      conn,
-			sendChan:  sendChan,
-			queueName: queueName,
+			conn:         conn,
+			sendChan:     sendChan,
+			ExchangeName: exchangeName,
+			queues:       make(map[string]string),
 		}
+
+		rabbitMQConn.setupQueues(languages)
 	})
 	return rabbitMQConn, err
 }
 
 // PublishTask sends a task message to the RabbitMQ queue
-// implement DqueuePublisher interface
-func (r *RabbitMQConn) PublishTask(task taskqueue.QueueMsg) error {
+// implement QueuePublisher interface
+func (r *RabbitMQConn) PublishTask(task taskqueue.QueueMsg, lang string) error {
 	// Publish the task message
 	err := r.sendChan.Publish(
-		"",          // Exchange
-		r.queueName, // Routing key
-		false,       // Mandatory
-		false,       // Immediate
+		r.ExchangeName, // Exchange
+		lang,           // Routing key
+		false,          // Mandatory
+		false,          // Immediate
 		amqp.Publishing{
-			ContentType: task.ContentType,
-			Body:        task.Body,
+			DeliveryMode: amqp.Persistent, // Make message persistent
+			ContentType:  task.ContentType,
+			Body:         task.Body,
 		})
 
 	if err != nil {
@@ -83,45 +97,61 @@ func (r *RabbitMQConn) PublishTask(task taskqueue.QueueMsg) error {
 	return nil
 }
 
-// ReceiveTasks receives a task message from the RabbitMQ queue
-// implement DqueueReceiver interface
-func (r *RabbitMQConn) ReceiveTasks() (<-chan taskqueue.QueueMsg, error) {
+// ConsumeTasks receives a task message from the RabbitMQ queue
+// implement.QueueConsumer interface
+func (r *RabbitMQConn) ConsumeTasks(lang string, taskChannel chan<- taskqueue.QueueMsg) error {
 	var err error
-	taskChannel := make(chan taskqueue.QueueMsg)
 
-	r.consumerOnce.Do(func() {
-		ch, chErr := r.conn.Channel()
-		if chErr != nil {
-			err = chErr
-			close(taskChannel) // Prevent potential hanging
-			return
-		}
-
-		msgs, consumeErr := ch.Consume(
-			r.queueName, "", true, false, false, false, nil,
-		)
-		if consumeErr != nil {
-			err = consumeErr
-			close(taskChannel)
-			return
-		}
-
-		go func() {
-			defer ch.Close() // Ensure the channel is closed when done
-			for msg := range msgs {
-				taskChannel <- taskqueue.QueueMsg{
-					Body:        msg.Body,
-					ContentType: msg.ContentType,
-				}
-			}
-			close(taskChannel)
-		}()
-	})
-
+	// Create a channel to consume messages
+	ch, err := r.conn.Channel()
 	if err != nil {
-		return nil, err
+		err = fmt.Errorf("failed to create channel: %w", err)
+		return err
 	}
-	return taskChannel, nil
+
+	// // Declare and bind the queue
+	// q, err := ch.QueueDeclare(
+	// 	"", false, true, false, false, nil,
+	// )
+	// if err != nil {
+	// 	err = fmt.Errorf("failed to declare queue: %w", err)
+	// 	return err
+	// }
+
+	// err = ch.QueueBind(q.Name, lang, r.ExchangeName, false, nil)
+	// if err != nil {
+	// 	err = fmt.Errorf("failed to bind queue: %w", err)
+	// 	return err
+	// }
+
+	qn, ok := r.queues[lang]
+	if !ok {
+		err = fmt.Errorf("queue for language %s not found", lang)
+		return err
+	}
+
+	msgs, err := ch.Consume(qn, "", true, false, false, false, nil)
+	if err != nil {
+		err = fmt.Errorf("failed to consume messages: %w", err)
+		return err
+	}
+
+	// Goroutine to handle incoming messages
+	go func() {
+		defer func() {
+			close(taskChannel)
+			ch.Close()
+		}()
+		for msg := range msgs {
+			taskChannel <- taskqueue.QueueMsg{
+				Body:        msg.Body,
+				ContentType: msg.ContentType,
+			}
+		}
+	}()
+
+	fmt.Println("Started Consuming tasks for language:", lang)
+	return nil
 }
 
 func (r *RabbitMQConn) Close() error {
@@ -129,4 +159,35 @@ func (r *RabbitMQConn) Close() error {
 		return err
 	}
 	return r.conn.Close()
+}
+
+func (r *RabbitMQConn) setupQueues(langs []string) error {
+	for _, lang := range langs {
+		fmt.Println("Setting up queue for language:", lang)
+		qn := lang + "_queue"
+		_, err := r.sendChan.QueueDeclare(
+			qn,    // name
+			true,  // durable
+			false, // autoDelete
+			false, // exclusive
+			false, // noWait
+			nil,   // args
+		)
+		if err != nil {
+			return err
+		}
+
+		if err := r.sendChan.QueueBind(
+			qn,             // queue name
+			lang,           // routing key
+			r.ExchangeName, // exchange
+			false,          // noWait
+			nil,            // args
+		); err != nil {
+			return err
+		}
+
+		r.queues[lang] = qn
+	}
+	return nil
 }
