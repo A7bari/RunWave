@@ -7,13 +7,15 @@ import (
 	"net/http/pprof"
 	_ "net/http/pprof"
 
-	"github.com/A7bari/RunWave/internal/db"
+	"github.com/A7bari/RunWave/internal/services"
 	"github.com/A7bari/RunWave/internal/taskqueue"
+
 	"github.com/gin-gonic/gin"
 )
 
 type ServerOpts struct {
-	Queues map[string]taskqueue.TaskQueue
+	TaskService   services.ITaskService
+	TaskPublisher taskqueue.QueuePublisher
 }
 type Server struct {
 	router *gin.Engine
@@ -22,15 +24,11 @@ type Server struct {
 func NewServer(opts ServerOpts) *Server {
 	r := gin.Default()
 
-	st := db.GetPostgresStore()
-
 	// Middleware to inject TaskQueue into context
 	r.Use(func(c *gin.Context) {
-		// Inject TaskQueues into context
-		for lang, q := range opts.Queues {
-			c.Set(lang, q)
-		}
-		c.Set("store", st)
+		c.Set("taskService", opts.TaskService)
+		c.Set("taskPublisher", opts.TaskPublisher)
+
 		c.Next()
 	})
 
