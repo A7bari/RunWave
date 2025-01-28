@@ -2,20 +2,27 @@ package coderunner
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/A7bari/RunWave/internal/services"
 	"github.com/A7bari/RunWave/internal/taskqueue"
 )
 
-type SchedulerCallback func(taskqueue.Task)
+// SchedulerCallback is a callback function for the scheduler
+// it takes the language and the task ID as arguments
+type SchedulerCallback func(language, taskId string)
 
 // SchedulerOpts is the options for the scheduler
 type SchedulerOpts struct {
 	// PodManager is the pod manager to manage pods
 	PodManager PodManager
 
-	// TaskQueue is the task queue to get tasks from
-	TaskQueue taskqueue.TaskQueue
+	// consumer is the consumer to consume the task
+	Consumer taskqueue.QueueConsumer
+
+	// TaskService is the task service to manage tasks
+	TaskService services.ITaskService
 
 	// event callback: called when a task is started
 	OnStartExec SchedulerCallback
@@ -28,68 +35,94 @@ type SchedulerOpts struct {
 }
 
 type Scheduler struct {
-	stop chan struct{}
-	ctx  context.Context
+	languages []string
+	stop      chan struct{}
+	ctx       context.Context
 	SchedulerOpts
 }
 
-func NewScheduler(conf SchedulerOpts) *Scheduler {
+func NewScheduler(conf SchedulerOpts, Languages ...string) *Scheduler {
+	if len(Languages) == 0 {
+		panic("[Scheduler] No languages provided")
+	}
 	s := &Scheduler{
 		SchedulerOpts: conf,
 		stop:          make(chan struct{}),
 		ctx:           context.Background(),
+		languages:     Languages,
 	}
 	return s
 }
 
 // StartWorkers starts the workers
 // the workers are the pods that are created to execute code
-// for each worker, a task is dequeued from the task queue and executed
+// for each language, a goroutine is started to consume tasks
 func (r *Scheduler) StartWorkers() {
+	for _, lang := range r.languages {
+		go r.startWorkers(lang)
+	}
+}
+
+// startWorkers starts the workers for a specific language
+// the workers are the pods that are created to execute code to that language
+// the worker consumes tasks from the task queue subscribed to the language
+func (r *Scheduler) startWorkers(language string) {
+	fmt.Println("[Scheduler] Starting workers for language:", language)
+	tasks := make(chan taskqueue.QueueMsg)
+	go r.Consumer.ConsumeTasks(language, tasks)
+
 	for {
 		select {
 		// If the scheduler is stopped, close the worker channel and return
 		case <-r.stop:
 			close(r.stop)
 			return
-		default:
+		case taskMsg := <-tasks:
+
+			// decode the task message
+			task, err := taskqueue.Decode(taskMsg.Body)
+
 			// If a worker is available, run the task
-			worker := r.PodManager.ConsumePod()
-			task := r.TaskQueue.GetTask()
+			worker := r.PodManager.ConsumePod(language)
+			if err != nil {
+				continue
+			}
+
 			go func() {
-				// Run the task
-				task.Running()
-				command, err := FormatCommand(task)
-				if err != nil {
-					task.Failed(err)
-					if r.OnFailExec != nil {
-						r.OnFailExec(task)
+				// Defer the task completion
+				// If there is an error, mark the task as failed
+				// and requeue the task
+				err = nil
+				defer func() {
+					if err != nil {
+						r.TaskService.MarkTaskAsFailed(task.TaskID)
+						if r.OnFailExec != nil {
+							r.OnFailExec(language, task.TaskID)
+						}
 					}
+				}()
+
+				// If the task is started, mark it as started
+				r.TaskService.MarkTaskAsRunning(task.TaskID)
+				if r.OnStartExec != nil {
+					r.OnStartExec(language, task.TaskID)
+				}
+
+				command, err := FormatCommand(task.Language, task.Code)
+				if err != nil {
 					return
 				}
 
-				if r.OnStartExec != nil {
-					r.OnStartExec(task)
-				}
+				// Run the command in the worker
 				res, err := r.PodManager.Run(command, worker, 5*time.Second)
-
-				// If there is an error, requeue the task
 				if err != nil {
-					task.Failed(err)
-					if r.OnFailExec != nil {
-						r.OnFailExec(task)
-					}
-
-					// Requeue the task
-					r.TaskQueue.AddTask(task)
 					return
 				}
 
 				// If the task is completed, mark it as completed
-				task.Completed()
-				task.SetResult(res.Output, res.IsError)
+				r.TaskService.MarkTaskAsSuccess(task.TaskID, res.Output, res.IsError)
 				if r.OnEndExec != nil {
-					r.OnEndExec(task)
+					r.OnEndExec(language, task.TaskID)
 				}
 			}()
 		}

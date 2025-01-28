@@ -1,14 +1,16 @@
 package coderunner
 
 import (
+	"fmt"
 	"log"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"testing"
 
 	"github.com/A7bari/RunWave/internal/db"
+	"github.com/A7bari/RunWave/internal/services"
 	"github.com/A7bari/RunWave/internal/taskqueue"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -36,15 +38,45 @@ func connectToK8s() PodManager {
 // TestSchedulerStartWorkers verifies the worker's task processing logic
 func TestSchedulerStartWorkers(t *testing.T) {
 	// Mock dependencies
-	mockTaskQueue := db.GetInMemTaskQueue(10)
+	mockTaskQueue, err := db.GetRabbitMQConn()
+
+	db := db.GetPostgresStore()
+
+	taskService := services.NewTaskService(db)
+
+	if err != nil {
+		log.Fatalf("Error connecting to RabbitMQ: %v", err)
+	}
+
+	taskIds := []string{}
 
 	for i := 1; i <= 4; i++ {
-		mockTaskQueue.AddTask(taskqueue.NewTaskBuilder().
-			SetID("task" + strconv.Itoa(i)).
-			SetLang("python").
-			SetCode("print('Hello, World!')").
-			Build())
+		taskID := uuid.New().String()
+		tmsg := taskqueue.NewTask(taskID, "python", "print('Hello, World!')")
+
+		// create a task
+		id, err := taskService.CreateTask(*taskqueue.NewTask(taskID, "python", "print('Hello, World!')"))
+		if err != nil {
+			log.Fatalf("Error creating task: %v", err)
+		}
+
+		if id != taskID {
+			log.Fatalf("Task ID mismatch: %s != %s", id, taskID)
+		}
+
+		emsg, err := tmsg.Encode()
+		if err != nil {
+			log.Fatalf("Error encoding task message: %v", err)
+		}
+
+		mockTaskQueue.PublishTask(taskqueue.QueueMsg{
+			Body: emsg,
+		}, "python")
+
+		taskIds = append(taskIds, taskID)
 	}
+
+	fmt.Println("Task IDs created : ", taskIds)
 
 	podManager := connectToK8s()
 
@@ -53,31 +85,36 @@ func TestSchedulerStartWorkers(t *testing.T) {
 	w.Add(4)
 
 	scheduler := NewScheduler(SchedulerOpts{
-		TaskQueue:  mockTaskQueue,
-		PodManager: podManager,
-		OnStartExec: func(task taskqueue.Task) {
-			log.Printf("Task %s started", task.GetTaskID())
+		Consumer:    mockTaskQueue,
+		PodManager:  podManager,
+		TaskService: taskService,
+		OnStartExec: func(lang, taskID string) {
+			log.Printf("Task %s started", taskID)
 		},
-		OnEndExec: func(task taskqueue.Task) {
-			log.Printf("Task %s completed", task.GetTaskID())
-			out, _ := task.GetResult()
+		OnEndExec: func(lang, taskID string) {
+			log.Printf("Task %s completed", taskID)
+			out, _, err := taskService.GetResult(taskID)
+			if err != nil {
+				log.Printf("Error getting task result: %v", err)
+			}
+
 			log.Printf("Output: %s", out)
 
-			finished = append(finished, task.GetTaskID())
+			finished = append(finished, taskID)
 			w.Done()
 		},
 
-		OnFailExec: func(task taskqueue.Task) {
-			log.Printf("Task %s failed", task.GetTaskID())
+		OnFailExec: func(lang, taskID string) {
+			log.Printf("Task %s failed", taskID)
 
 			w.Done()
 		},
-	})
+	}, "python")
 
 	// Run StartWorkers in a goroutine
 	go scheduler.StartWorkers()
 
 	// Wait for the workers to process the tasks
 	w.Wait()
-	assert.ElementsMatch(t, []string{"task1", "task2", "task3", "task4"}, finished)
+	assert.ElementsMatch(t, taskIds, finished)
 }

@@ -2,18 +2,16 @@ package coderunner
 
 import (
 	"fmt"
-
-	"github.com/A7bari/RunWave/internal/taskqueue"
 )
 
-func FormatCommand(task taskqueue.Task) ([]string, error) {
-	switch task.GetLanguage() {
+func FormatCommand(lang, code string) ([]string, error) {
+	switch lang {
 	case "python":
-		return []string{"python", "-c", task.GetCode()}, nil
+		return []string{"python", "-c", code}, nil
 	case "java":
-		return []string{"java", "-c", task.GetCode()}, nil
+		return []string{"java", "-c", code}, nil
 	case "c":
-		return []string{"gcc", "-o", "temp", "-x", "c", "-", task.GetCode()}, nil
+		return []string{"gcc", "-o", "temp", "-x", "c", "-", code}, nil
 	default:
 		return nil, fmt.Errorf("unsupported language")
 	}

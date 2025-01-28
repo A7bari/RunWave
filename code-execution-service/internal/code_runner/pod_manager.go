@@ -35,7 +35,7 @@ type PodManager interface {
 
 	// Get a pod to run a command
 	// and Lock the pod for the caller
-	ConsumePod() string
+	ConsumePod(lang string) string
 }
 
 // PodManagerImp is the implementation of PodManager
@@ -43,10 +43,14 @@ type PodManagerImp struct {
 	client    kubernetes.Interface
 	config    *rest.Config
 	namespace string
-	freePods  []*corev1.Pod
 	inUsePods map[string]*corev1.Pod
 	mu        sync.Mutex
 	ctx       context.Context
+
+	// freePods is a map of pods that are not in use
+	// for each language which is set as label in the pod
+	// the key is the language
+	freePods map[string][]*corev1.Pod
 
 	// cond is used to signal waiting goroutines
 	// when a pod is added to the freePods list
@@ -59,7 +63,7 @@ func NewPodManager(client kubernetes.Interface, config *rest.Config, namespace s
 		client:    client,
 		config:    config,
 		namespace: namespace,
-		freePods:  make([]*corev1.Pod, 0),
+		freePods:  make(map[string][]*corev1.Pod, 0),
 		inUsePods: make(map[string]*corev1.Pod),
 		ctx:       context.Background(),
 	}
@@ -70,20 +74,21 @@ func NewPodManager(client kubernetes.Interface, config *rest.Config, namespace s
 	return pm
 }
 
-// ConsumePod gets a pod from the queue
+// ConsumePod gets a available pod for a language
 // blocks until a pod is available
-// and locks it for the caller
-func (p *PodManagerImp) ConsumePod() string {
+// once a pod is returned, can't be consumed by other callers
+func (p *PodManagerImp) ConsumePod(lang string) string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Wait until a pod is available
-	if len(p.freePods) == 0 {
+	// Block until a pod is available for the given language
+	for len(p.freePods[lang]) == 0 {
+		// Wait until a pod is available, possibly for another language
 		p.cond.Wait()
 	}
 
-	pod := p.freePods[0]
-	p.freePods = p.freePods[1:]
+	pod := p.freePods[lang][0]
+	p.freePods[lang] = p.freePods[lang][1:]
 	p.inUsePods[pod.Name] = pod
 
 	return pod.Name
@@ -197,7 +202,9 @@ func (p *PodManagerImp) addPod(pod *corev1.Pod) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.freePods = append(p.freePods, pod)
+	lang := pod.Labels["language"]
+
+	p.freePods[lang] = append(p.freePods[lang], pod)
 	p.cond.Signal() // Wake up one waiting goroutine
 }
 
@@ -225,7 +232,6 @@ func (p *PodManagerImp) setupInformer() {
 			}
 
 			if pod.Labels["app"] != inUsePodLabel {
-
 				p.addPod(pod)
 			}
 		},
@@ -241,7 +247,6 @@ func (p *PodManagerImp) setupInformer() {
 				log.Printf("Pod %s transitioned to Running state", newPod.Name)
 				if newPod.Labels["app"] != inUsePodLabel {
 					p.addPod(newPod)
-					log.Printf("Pod added after transition: %s", newPod.Name)
 				}
 			}
 		},
@@ -255,9 +260,11 @@ func (p *PodManagerImp) setupInformer() {
 
 			// remove the pod from the free pods list
 			// if it is deleted
-			for i, fp := range p.freePods {
+			lang := pod.Labels["language"]
+
+			for i, fp := range p.freePods[lang] {
 				if fp.Name == pod.Name {
-					p.freePods = append(p.freePods[:i], p.freePods[i+1:]...)
+					p.freePods[lang] = append(p.freePods[lang][:i], p.freePods[lang][i+1:]...)
 					return
 				}
 			}
