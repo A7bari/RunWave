@@ -16,6 +16,15 @@ type ServiceConfig struct {
 	Languages    []string
 	QueueAdrr    string
 	QueueName    string
+	Postgres     PostgresConfig
+}
+
+type PostgresConfig struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+	DBName   string
 }
 
 var (
@@ -36,9 +45,16 @@ func loadConfig() *ServiceConfig {
 	namespace := flag.String("namespace", "code-exec-system", "The namespace to use for the code execution pods")
 	standbyLabel := flag.String("standby-label", "app=standby-pod", "The label to use for standby pods")
 	inUseLabel := flag.String("in-use-label", "in-use-pod", "The label to use for in-use pods")
-	langs := flag.String("languages", "python,javascript", "The languages to support")
+	langs := flag.String("languages", "python", "The languages to support")
 	qAdrr := flag.String("queue-addr", "amqp://guest:guest@localhost:5672/", "The RabbitMQ address")
 	qName := flag.String("queue-name", "task-queue", "The RabbitMQ queue name")
+
+	PostgresConfig := PostgresConfig{}
+	PostgresConfig.Host = *flag.String("postgres-host", "localhost", "The Postgres host")
+	PostgresConfig.Port = *flag.String("postgres-port", "5433", "The Postgres port")
+	PostgresConfig.User = *flag.String("postgres-user", "youruser", "The Postgres user")
+	PostgresConfig.Password = *flag.String("postgres-password", "yourpassword", "The Postgres password")
+	PostgresConfig.DBName = *flag.String("postgres-dbname", "yourdatabase", "The Postgres database name")
 
 	flag.Parse()
 
@@ -50,5 +66,6 @@ func loadConfig() *ServiceConfig {
 		Languages:    strings.Split(*langs, ","),
 		QueueAdrr:    *qAdrr,
 		QueueName:    *qName,
+		Postgres:     PostgresConfig,
 	}
 }
