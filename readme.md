@@ -77,7 +77,7 @@ We combined Docker and Kubernetes to achieve the desired level of isolation, sca
 
 The high-level architecture will consist of the following components:
 
-![Architecture Overview](/docs/architecture.png)
+![Architecture Overview](/docs/Architecture.png)
 
 ### API Layer
 
